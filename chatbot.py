@@ -10,17 +10,15 @@ import random
 import argparse
 from os import system
 import sys
+import socket
 
 class chatbot():
-  def __init__(self, config, ip, port, is_master):
+  def __init__(self, config, ip,is_master):
     self.ip = ip
-    self.port = port
-    self.ip_full = ip + ':' + str(port)
     self.is_master = is_master
-    file_handler = logging.FileHandler(self.ip_full + '.log', mode= 'a', encoding="utf8")
+    file_handler = logging.FileHandler(str(ip)+'.log', mode= 'a', encoding="utf-8")
     console_handler = logging.StreamHandler(sys.stdout)
     logging.basicConfig(format='%(asctime)s-%(name)s-%(levelname)s-%(message)s',level=logging.INFO, handlers=[file_handler,console_handler])
-    
     self.zkhost = config['ZOOKEEPER']['HOST']
     self.config = config
     self.updater = None 
@@ -35,16 +33,22 @@ class chatbot():
       if not event:
           return
       if event.type=='CREATED':
-          print(data.decode())
+          logging.info(data.decode())
           master_ip = data.decode()
-          if master_ip == self.ip_full:
-             if not self.is_master:
-                commend = 'python chatbot_test.py --is_master 1 --port '+ str(self.port) +' --ip '+str(self.ip)
-                print(commend) 
+          if master_ip == self.ip:
+              if not self.is_master:
+                commend = 'python chatbot.py --is_master 1 --ip '+str(self.ip)
+                logging.info(commend) 
                 ok = system(commend)
-                print(ok)
-          print(stat)
-          print(event)
+                logging.info(ok)
+          if master_ip != self.ip:
+              if self.is_master:
+                commend = 'python chatbot.py --ip '+str(self.ip)
+                logging.info(commend) 
+                ok = system(commend)
+                logging.info(ok)
+          logging.info(stat)
+          logging.info(event)
           # self.updater.stop()
           # self.updater = None 
           # self.master()
@@ -56,7 +60,12 @@ class chatbot():
       self.follow()
   def master(self,):
       if not self.zk.exists(self.master_path):
-        self.zk.create(self.master_path,bytes(self.ip + ':' + str(self.port), encoding = "utf8"),makepath=True)
+        self.zk.create(self.master_path,bytes(self.ip, encoding = "utf8"),makepath=True)
+      else:
+         master_ip = self.zk.get(self.master_path)[0].decode()
+         if master_ip != self.ip:
+            logging.error("there is existed master node " + master_ip)
+            return
       def echo(update, context):
           reply_message = update.message.text.upper()
           logging.info("Update: "+str(update))
@@ -78,28 +87,32 @@ class chatbot():
   def follow(self, ):
 
     zk = self.zk
-    key = self.root + '/' + self.ip_full
-    print(key)
+    key = self.root + '/' + self.ip
+    if self.zk.exists(self.master_path):
+         master_ip = self.zk.get(self.master_path)[0].decode()
+         if master_ip == self.ip:
+            logging.error("it is master node " + master_ip)
+            return
     if not zk.exists(key):
-        print(key, self.ip_full)
-        zk.create(key,bytes(self.ip_full, encoding = "utf8"),makepath=True)
-    zk.set(key,bytes(self.ip_full, encoding = "utf8"))
-    routing_key = self.ip_full
+        logging.info('create node '+ self.ip + ' in zookeeper '+key)
+        zk.create(key,bytes(self.ip, encoding = "utf8"),makepath=True)
+    zk.set(key,bytes(self.ip, encoding = "utf8"))
+    routing_key = self.ip
     if not zk.exists(key):
       zk.create(key,bytes(routing_key, encoding = "utf8"),makepath=True)
     zk.set(key, bytes(routing_key, encoding = "utf8"))
     bot = Bot(token=config['TELEGRAM']['ACCESS_TOKEN'])
-    self.resive(bot=bot, routing_key =routing_key )
+    self.receive(bot=bot, routing_key =routing_key )
   
   
-  def resive(self, bot, routing_key):
+  def receive(self, bot, routing_key):
       channel = self.channel
-      print(routing_key)
+      logging.info("routing_key in rabbitmq is " + routing_key)
       result = channel.queue_declare('',exclusive=True)
       channel.queue_bind(exchange = config['RABBITMQ']['CHANNEL'],queue = result.method.queue,routing_key=routing_key)
       def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag = method.delivery_tag)
-        print(body.decode())
+        logging.info("receive message : " + body.decode())
         content_body = json.loads(str(body.decode()))
         bot.send_message(chat_id=content_body['id'], text=content_body['message'])
       
@@ -129,15 +142,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
 
-    parser.add_argument("--config", type=str, default='config.ini',help="configuration")
+    parser.add_argument("--config", type=str, default='docker_config.ini',help="configuration")
     parser.add_argument("--ip", type=str, default='127.0.0.1',help="ip")
-    parser.add_argument("--port", type=int, default=2182,help="port")
     parser.add_argument("--is_master", type=bool, default=False,help="is master")
 
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
     ip = args.ip
-    port = args.port
     is_master = args.is_master
-    a = chatbot(config= config, ip = ip, port = port, is_master = is_master)
+    a = chatbot(config= config, ip = ip, is_master = is_master)
