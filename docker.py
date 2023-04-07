@@ -65,5 +65,4 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read(args.config)
     ip = args.ip
-    is_master = args.is_master
     a = chatbot(config= config, ip = ip)
