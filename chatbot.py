@@ -13,7 +13,11 @@ import sys
 import socket
 import redis
 import openai
-
+import base64
+def encode(string:str):
+   return base64.b64encode(string.encode())
+def decode(b64_str):
+   return base64.b64decode(b64_str).decode()
 class chatbot():
   def __init__(self, config, ip,is_master):
     self.ip = ip
@@ -70,20 +74,49 @@ class chatbot():
             logging.error("there is existed master node " + master_ip)
             return
       def node(update, context):
-          commd = update.message.text.upper()
+          commd_list = update.message.text.upper().split(' ')
+          if len(commd_list) < 2:
+             update.message.reply_text('Usage:/node list or /node master or  /node add nodeName or /node delete nodeName')
+             return
+          commd = commd_list[1]
           logging.info("Update: "+str(update))
           logging.info("Context: "+str(context))
           if commd == 'LIST':
-            node_list = self.zk.get_children(self.root)
-            node_list.remove('master')
-            master_ip = self.zk.get(self.master_path)[0].decode()
-            node_list.appand(master_ip)
-            update.message.reply_text(str(node_list))
+              node_list = self.zk.get_children(self.root)
+              node_list.remove('master')
+              master_ip = self.zk.get(self.master_path)[0].decode()
+              node_list.apend(master_ip)
+              update.message.reply_text(str(node_list))
           elif commd == 'MASTER':
-             master_ip = self.zk.get(self.master_path)[0].decode()
-             update.message.reply_text(str(master_ip))
+              master_ip = self.zk.get(self.master_path)[0].decode()
+              update.message.reply_text(str(master_ip))
+          elif commd == 'ADD':
+              if len(commd_list) != 3:
+                update.message.reply_text('Usage: /node add nodeName')
+                return
+              node_list = self.zk.get_children(self.root)
+              node_list.remove('master')
+              master_ip = self.zk.get(self.master_path)[0].decode()
+              node_list.apend(master_ip)
+              new_node = str(commd_list[2])
+              if new_node in node_list:
+                update.message.reply_text("existed nodes are :"+str(node_list))
+              logging.info('Create a new node ' + new_node)
+              ok = system('docker run --name '+ new_node +' --net 7940 liesgame/chatbot python chatbot.py --config docker_config.ini --ip '+new_node)
+              logging.info(ok)
+          elif commd == 'DELECT':    
+              if len(commd_list) != 3:
+                update.message.reply_text('Usage: /node delect nodeName')
+                return
+              node_list = self.zk.get_children(self.root)
+              new_node = str(commd_list[2])
+              if not new_node in node_list:
+                 update.message.reply_text("existed nodes are :"+str(node_list))
+              logging.info('delete node ' + new_node)
+              ok = system('docker kill '+ new_node)
+              logging.info(ok)              
           else:
-             update.message.reply_text('Usage:/ node list or / node master')
+             update.message.reply_text('Usage:/node list or /node master or  /node add nodeName or /node delete nodeName')
           # self.send(id = update.effective_chat.id, message_content = update.message.text, method='echo')
       def echo(update, context):
           reply_message = update.message.text.upper()
@@ -186,9 +219,9 @@ class chatbot():
         def return_chat(bot, id, return_message):
           human_message = {"role":"user", "content": return_message}
           global redis1
-          redis1.lpush(id, json.dumps(human_message))
+          redis1.lpush(id, encode(json.dumps(human_message)))
           chat_message = redis1.lrange(id, 0, 50)[::-1]
-          chat_message = [json.loads(i.decode()) for i in chat_message]
+          chat_message = [json.loads(decode(i.decode())) for i in chat_message]
           response =  openai.ChatCompletion.create(
               # engine="text-davinci-003",
               model = 'gpt-3.5-turbo',

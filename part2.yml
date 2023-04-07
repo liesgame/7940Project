@@ -6,12 +6,18 @@ services:
     networks:
       - '7940'
     command:  ["--config", "docker_config.ini"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - /usr/bin/docker:/usr/bin/docker
     entrypoint: ["python", "heartbeat.py"]
 
 
   node1:
     image: liesgame/chatbot
     container_name: node1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - /usr/bin/docker:/usr/bin/docker
     networks:
       - '7940'
     command: ["--config", "docker_config.ini", "--ip", "node1", "--is_master", "1"]
@@ -21,6 +27,9 @@ services:
   node2:
     image: liesgame/chatbot
     container_name: node2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - /usr/bin/docker:/usr/bin/docker
     networks:
       - '7940'
     command: ["--config", "docker_config.ini", "--ip", "node2"]
@@ -30,6 +39,9 @@ services:
   node3:
     image: liesgame/chatbot
     container_name: node3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - /usr/bin/docker:/usr/bin/docker
     networks:
       - '7940'
     command: ["--config", "docker_config.ini", "--ip", "node3"]
