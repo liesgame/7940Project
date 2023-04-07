@@ -29,7 +29,7 @@ class chatbot():
 
         def return_add(return_message):
             logging.info('Create a new node ' + return_message)
-            ok = system('docker run --name '+ return_message +' --net 7940 liesgame/chatbot python chatbot.py --config docker_config.ini --ip '+return_message)
+            ok = system('docker run -d --name '+ return_message +' --net 7940 liesgame/chatbot python chatbot.py --config docker_config.ini --ip '+return_message)
             logging.info(ok)
         
         def return_delete(return_message):
