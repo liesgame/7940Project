@@ -1,14 +1,5 @@
 version: '3'
 services:
-  heartbeat:
-    image: liesgame/chatbot
-    container_name: heartbeat
-    networks:
-      - '7940'
-    command:  ["--config", "docker_config.ini"]
-    entrypoint: ["python", "heartbeat.py"]
-
-
   node1:
     image: liesgame/chatbot
     container_name: node1
@@ -35,6 +26,13 @@ services:
     command: ["--config", "docker_config.ini", "--ip", "node3"]
     entrypoint: ["python", "chatbot.py"]
 
+  heartbeat:
+    image: liesgame/chatbot
+    container_name: heartbeat
+    networks:
+      - '7940'
+    command:  ["--config", "docker_config.ini"]
+    entrypoint: ["python", "heartbeat.py"]
 
 networks:
   '7940':
