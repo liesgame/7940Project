@@ -1,5 +1,5 @@
 from telegram import Update, Bot
-from telegram.ext import Updater,MessageHandler,Filters
+from telegram.ext import Updater,MessageHandler,Filters, CommandHandler, CallbackContext
 import configparser
 import logging
 from kazoo.client import KazooClient, DataWatch
@@ -11,11 +11,14 @@ import argparse
 from os import system
 import sys
 import socket
+import redis
+import openai
 
 class chatbot():
   def __init__(self, config, ip,is_master):
     self.ip = ip
     self.is_master = is_master
+    openai.api_key = (config["OPENAI"]["API_KEYS"])
     file_handler = logging.FileHandler(str(ip)+'.log', mode= 'a', encoding="utf-8")
     console_handler = logging.StreamHandler(sys.stdout)
     logging.basicConfig(format='%(asctime)s-%(name)s-%(levelname)s-%(message)s',level=logging.INFO, handlers=[file_handler,console_handler])
@@ -27,6 +30,8 @@ class chatbot():
     self.zk = KazooClient(hosts=self.zkhost)   
     self.zk.start()
     self.rabbitmq()
+    global redis1
+    redis1 = redis.Redis(host=(config['REDIS']['HOST']), password=(config['REDIS']['PASSWORD']), port=(config['REDIS']['REDISPORT']))
 
     @self.zk.DataWatch(path=self.master_path)
     def _data_change(data,stat,event = None):
@@ -49,9 +54,6 @@ class chatbot():
                 logging.info(ok)
           logging.info(stat)
           logging.info(event)
-          # self.updater.stop()
-          # self.updater = None 
-          # self.master()
           return
     
     if is_master:
@@ -69,15 +71,46 @@ class chatbot():
       def echo(update, context):
           reply_message = update.message.text.upper()
           logging.info("Update: "+str(update))
-          logging.info("Update: "+str(type(update)))
-          self.send(update)
+          logging.info("Context: "+str(context))
+          self.send(id = update.effective_chat.id, message_content = update.message.text, method='echo')
           # context.bot.send_message(chat_id = update.effective_chat.id, text = reply_message)
+      def add(update: Update, context: CallbackContext) -> None:
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          try:
+             msg = context.args[0]
+          except(IndexError, ValueError):
+             update.message.reply_text('Usage:/ add <keyword>')
+             return
+          self.send(id = update.effective_chat.id, message_content = context.args[0], method='add')
+      def chat(update: Update, context: CallbackContext):
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          try:
+             msg = context.args[0]
+          except(IndexError, ValueError):
+             update.message.reply_text('Usage:/ chat <string>')
+             return
+          self.send(id = update.effective_chat.id, message_content = " ".join(context.args), method='chat')
+      
+      def hello(update: Update, context: CallbackContext) -> None:
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          update.message.reply_text('Good day, '+ context.args[0] + '!')
+      def help_command(update: Update, context: CallbackContext) -> None:
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          update.message.reply_text('Helping you helping you')
 
       self.updater=Updater(token=(config['TELEGRAM']['ACCESS_TOKEN']),use_context= True)
       dispatcher=self.updater.dispatcher
       #You can set this logging module,so you will know when and why things do not work as expected
       #register a dispatcher to handle message: here we register an echo dispatcher   
       echo_handler=MessageHandler(Filters.text&(~Filters.command),echo)
+      dispatcher.add_handler(CommandHandler("add", add))
+      dispatcher.add_handler(CommandHandler("help", help_command))
+      dispatcher.add_handler(CommandHandler("hello", hello))
+      dispatcher.add_handler(CommandHandler("chat", chat))
       dispatcher.add_handler(echo_handler)
       
       # TO start the bot
@@ -111,15 +144,53 @@ class chatbot():
       result = channel.queue_declare('',exclusive=True)
       channel.queue_bind(exchange = config['RABBITMQ']['CHANNEL'],queue = result.method.queue,routing_key=routing_key)
       def callback(ch, method, properties, body):
+        def return_chat(bot, id, return_message):
+          human_message = {"role":"user", "content": return_message}
+          global redis1
+          redis1.lpush(id, json.dumps(human_message))
+          chat_message = redis1.lrange(id, 0, 50)[::-1]
+          chat_message = [json.loads(i.decode()) for i in chat_message]
+          response =  openai.ChatCompletion.create(
+              # engine="text-davinci-003",
+              model = 'gpt-3.5-turbo',
+              messages=chat_message,
+              temperature=0.7,
+              max_tokens=1000
+              # top_p=1.0,
+              # frequency_penalty=0.0,
+              # presence_penalty=0.6
+              # stop=["human:"]
+            )
+          logging.info("chat: "+str(response))
+          bot_message = response['choices'][0]['message']['content'].strip()
+          bot.send_message(chat_id=id, text =bot_message)
+          redis1.lpush(id, json.dumps({'role':'assistant','content':bot_message}))
+
+        def return_echo(bot, id, return_message):
+           bot.send_message(chat_id=id, text=return_message)
+        
+        def return_add(bot, id, return_message):
+          try:
+              global redis1
+              logging.info("redis incr "+ return_message)
+              redis1.incr(return_message)
+              bot.send_message(chat_id=id, text = 'You have said ' + return_message + ' for ' + redis1.get(return_message).decode('UTF-8') + ' times.')
+          except (IndexError, ValueError):
+              bot.send_message(chat_id=id, text = 'Usage:/ add <keyword>')
         ch.basic_ack(delivery_tag = method.delivery_tag)
         logging.info("receive message : " + body.decode())
         content_body = json.loads(str(body.decode()))
-        bot.send_message(chat_id=content_body['id'], text=content_body['message'])
+        if content_body['method'] == 'echo':
+           return_echo(bot=bot, id =content_body['id'], return_message = content_body['message'])
+        elif content_body['method'] == 'add':
+           return_add(bot=bot, id =content_body['id'], return_message = content_body['message'])
+        elif content_body['method'] == 'chat':
+           return_chat(bot=bot, id =content_body['id'], return_message = content_body['message'])
       
       channel.basic_consume(result.method.queue,callback,auto_ack = False)
       channel.start_consuming()
   
-  def send(self, update):
+  def send(self, id, message_content, method):
     zk = self.zk
     root = self.root
     key_list = zk.get_children(root)
@@ -129,9 +200,9 @@ class chatbot():
       return
     key = root + '/' +key_list[random.randint(0,len(key_list) - 1)]
     routing_key = self.zk.get(key)[0].decode()
-    message=json.dumps({'id': update.effective_chat.id, 'message' : update.message.text}, ensure_ascii=False)
-    logging.info("Send: "+str(routing_key) +' message: ' + str(message))
-    self.channel.basic_publish(exchange = config['RABBITMQ']['CHANNEL'],routing_key = routing_key,body = message,properties=pika.BasicProperties(delivery_mode = 2))
+    send_message_mq=json.dumps({'id': id, 'message' : message_content, 'method' : method}, ensure_ascii=False)
+    logging.info("Send: "+str(routing_key) +' message: ' + str(send_message_mq))
+    self.channel.basic_publish(exchange = config['RABBITMQ']['CHANNEL'],routing_key = routing_key,body = send_message_mq,properties=pika.BasicProperties(delivery_mode = 2))
 
   def rabbitmq(self,):
     credentials = pika.PlainCredentials(config['RABBITMQ']['NAME'], config['RABBITMQ']['PASSWORD'])  # mq用户名和密码
