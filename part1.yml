@@ -22,4 +22,5 @@ services:
 
 networks:
   '7940':
+    name: '7940'
     driver: bridge
