@@ -61,6 +61,7 @@ class chatbot():
     else:
       self.follow()
   def master(self,):
+      # openai.api_key = (config["OPENAI"]["API_KEYS"])
       if not self.zk.exists(self.master_path):
         self.zk.create(self.master_path,bytes(self.ip, encoding = "utf8"),makepath=True)
       else:
@@ -68,6 +69,22 @@ class chatbot():
          if master_ip != self.ip:
             logging.error("there is existed master node " + master_ip)
             return
+      def node(update, context):
+          commd = update.message.text.upper()
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          if commd == 'LIST':
+            node_list = self.zk.get_children(self.root)
+            node_list.remove('master')
+            master_ip = self.zk.get(self.master_path)[0].decode()
+            node_list.appand(master_ip)
+            update.message.reply_text(str(node_list))
+          elif commd == 'MASTER':
+             master_ip = self.zk.get(self.master_path)[0].decode()
+             update.message.reply_text(str(master_ip))
+          else:
+             update.message.reply_text('Usage:/ node list or / node master')
+          # self.send(id = update.effective_chat.id, message_content = update.message.text, method='echo')
       def echo(update, context):
           reply_message = update.message.text.upper()
           logging.info("Update: "+str(update))
@@ -92,6 +109,27 @@ class chatbot():
              update.message.reply_text('Usage:/ chat <string>')
              return
           self.send(id = update.effective_chat.id, message_content = " ".join(context.args), method='chat')
+          # id = update.effective_chat.id
+          # human_message = {"role":"user", "content": " ".join(context.args)}
+          # global redis1
+          # redis1.lpush(id, json.dumps(human_message))
+          # chat_message = redis1.lrange(id, 0, 50)[::-1]
+          # chat_message = [json.loads(i.decode()) for i in chat_message]
+          # response =  openai.ChatCompletion.create(
+          #     # engine="text-davinci-003",
+          #     model = 'gpt-3.5-turbo',
+          #     messages=chat_message,
+          #     temperature=0.7,
+          #     max_tokens=1000
+          #     # top_p=1.0,
+          #     # frequency_penalty=0.0,
+          #     # presence_penalty=0.6
+          #     # stop=["human:"]
+          #   )
+          # logging.info("chat: "+str(response))
+          # bot_message = response['choices'][0]['message']['content'].strip()
+          # update.message.reply_text(bot_message)
+          # redis1.lpush(id, json.dumps({'role':'assistant','content':bot_message}))
       
       def hello(update: Update, context: CallbackContext) -> None:
           logging.info("Update: "+str(update))
@@ -111,6 +149,7 @@ class chatbot():
       dispatcher.add_handler(CommandHandler("help", help_command))
       dispatcher.add_handler(CommandHandler("hello", hello))
       dispatcher.add_handler(CommandHandler("chat", chat))
+      dispatcher.add_handler(CommandHandler("node", node))
       dispatcher.add_handler(echo_handler)
       
       # TO start the bot
