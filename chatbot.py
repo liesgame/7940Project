@@ -301,7 +301,7 @@ class chatbot():
            return_add(bot=bot, id =content_body['id'], return_message = content_body['message'])
         elif content_body['method'] == 'chat':
            return_chat(bot=bot, id =content_body['id'], return_message = content_body['message'])
-        elif content_body['method'] == 'chat':
+        elif content_body['method'] == 'stock':
            return_stock(bot=bot, id =content_body['id'], return_message = content_body['message'])
       
       channel.basic_consume(result.method.queue,callback,auto_ack = False)
