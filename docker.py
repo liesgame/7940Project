@@ -35,6 +35,7 @@ class chatbot():
         def return_delete(return_message):
             logging.info('delete node ' + return_message)
             ok = system('docker kill '+ return_message)
+            ok = system('docker rm '+ return_message)
             logging.info(ok)  
     
         ch.basic_ack(delivery_tag = method.delivery_tag)
