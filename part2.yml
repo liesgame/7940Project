@@ -1,0 +1,42 @@
+version: '3'
+services:
+  heartbeat:
+    image: chatbot:4
+    container_name: heartbeat
+    networks:
+      - '7940'
+    command:  ["--config", "docker_config.ini"]
+    entrypoint: ["python", "heartbeat.py"]
+
+
+  node1:
+    image: chatbot:4
+    container_name: node1
+    networks:
+      - '7940'
+    command: ["--config", "docker_config.ini", "--ip", "node1", "--is_master", "1"]
+    entrypoint: ["python", "chatbot.py"]
+
+
+  node2:
+    image: chatbot:4
+    container_name: node2
+    networks:
+      - '7940'
+    command: ["--config", "docker_config.ini", "--ip", "node2"]
+    entrypoint: ["python", "chatbot.py"]
+
+
+  node3:
+    image: chatbot:4
+    container_name: node3
+    networks:
+      - '7940'
+    command: ["--config", "docker_config.ini", "--ip", "node3"]
+    entrypoint: ["python", "chatbot.py"]
+
+
+networks:
+  '7940':
+    name: '7940'
+    driver: bridge

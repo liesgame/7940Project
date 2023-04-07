@@ -1,0 +1,25 @@
+version: '3'
+services:
+  zookeeper:
+    image: zookeeper
+    container_name: zookeeper
+    networks:
+      - '7940'
+    ports:
+      - 2181:2181
+    environment: 
+      - TZ=Asia/Shanghai
+
+  
+  rabbitmq:
+    image: rabbitmq
+    container_name: rabbitmq
+    networks:
+      - '7940'
+    ports:
+      - 5672:5672
+      - 15672:15672
+
+networks:
+  '7940':
+    driver: bridge
