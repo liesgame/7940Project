@@ -281,6 +281,10 @@ class chatbot():
 
         def return_stock(bot, id, return_message):
            real_time_stock = getStockData(return_message)
+           logging.info("chat: "+str(real_time_stock))
+           if len(real_time_stock) < 1:
+              bot.send_message(chat_id=id, text='Without the symbol of '+return_message)
+              return
            textMessage = generateMessage(real_time_stock)
            bot.send_message(chat_id=id, text=textMessage)
         
