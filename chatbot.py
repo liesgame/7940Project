@@ -74,18 +74,18 @@ class chatbot():
             logging.error("there is existed master node " + master_ip)
             return
       def node(update, context):
-          commd_list = update.message.text.upper().split(' ')
+          commd_list = update.message.text.split(' ')
           if len(commd_list) < 2:
              update.message.reply_text('Usage:/node list or /node master or  /node add nodeName or /node delete nodeName')
              return
-          commd = commd_list[1]
+          commd = commd_list[1].upper()
           logging.info("Update: "+str(update))
           logging.info("Context: "+str(context))
           if commd == 'LIST':
               node_list = self.zk.get_children(self.root)
               node_list.remove('master')
               master_ip = self.zk.get(self.master_path)[0].decode()
-              node_list.apend(master_ip)
+              node_list.append(master_ip)
               update.message.reply_text(str(node_list))
           elif commd == 'MASTER':
               master_ip = self.zk.get(self.master_path)[0].decode()
@@ -97,24 +97,26 @@ class chatbot():
               node_list = self.zk.get_children(self.root)
               node_list.remove('master')
               master_ip = self.zk.get(self.master_path)[0].decode()
-              node_list.apend(master_ip)
+              node_list.append(master_ip)
               new_node = str(commd_list[2])
               if new_node in node_list:
                 update.message.reply_text("existed nodes are :"+str(node_list))
+                return
+              self.channel.basic_publish(exchange = config['RABBITMQ']['CHANNEL'],routing_key = 'docker',body = json.dumps({'message' : new_node, 'method' : 'add'}, ensure_ascii=False),properties=pika.BasicProperties(delivery_mode = 2))
               logging.info('Create a new node ' + new_node)
-              ok = system('docker run --name '+ new_node +' --net 7940 liesgame/chatbot python chatbot.py --config docker_config.ini --ip '+new_node)
-              logging.info(ok)
-          elif commd == 'DELECT':    
+          elif commd == 'DELETE':    
               if len(commd_list) != 3:
-                update.message.reply_text('Usage: /node delect nodeName')
+                update.message.reply_text('Usage: /node delete nodeName')
                 return
               node_list = self.zk.get_children(self.root)
               new_node = str(commd_list[2])
               if not new_node in node_list:
                  update.message.reply_text("existed nodes are :"+str(node_list))
+                 return
+              if new_node == 'master':
+                 new_node = self.zk.get(self.master_path)[0].decode()
+              self.channel.basic_publish(exchange = config['RABBITMQ']['CHANNEL'],routing_key = 'docker',body = json.dumps({'message' : new_node, 'method' : 'delete'}, ensure_ascii=False),properties=pika.BasicProperties(delivery_mode = 2))
               logging.info('delete node ' + new_node)
-              ok = system('docker kill '+ new_node)
-              logging.info(ok)              
           else:
              update.message.reply_text('Usage:/node list or /node master or  /node add nodeName or /node delete nodeName')
           # self.send(id = update.effective_chat.id, message_content = update.message.text, method='echo')
@@ -171,7 +173,8 @@ class chatbot():
       def help_command(update: Update, context: CallbackContext) -> None:
           logging.info("Update: "+str(update))
           logging.info("Context: "+str(context))
-          update.message.reply_text('Helping you helping you')
+          update.message.reply_text('Helping you')
+          update.message.reply_text('/add /chat /hello /node')
 
       self.updater=Updater(token=(config['TELEGRAM']['ACCESS_TOKEN']),use_context= True)
       dispatcher=self.updater.dispatcher
@@ -236,7 +239,7 @@ class chatbot():
           logging.info("chat: "+str(response))
           bot_message = response['choices'][0]['message']['content'].strip()
           bot.send_message(chat_id=id, text =bot_message)
-          redis1.lpush(id, json.dumps({'role':'assistant','content':bot_message}))
+          redis1.lpush(id, encode(json.dumps({'role':'assistant','content':bot_message})))
 
         def return_echo(bot, id, return_message):
            bot.send_message(chat_id=id, text=return_message)
