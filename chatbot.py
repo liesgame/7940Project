@@ -162,31 +162,15 @@ class chatbot():
              return
           self.send(id = update.effective_chat.id, message_content = msg, method='stock')
           # context.bot.send_message(chat_id = update.effective_chat.id, text = reply_message)
-      def video(update, context):
+      def audio(update, context):
           logging.info("Update: "+str(update))
           logging.info("Context: "+str(context))
           try:
              msg = context.args[0]
           except(IndexError, ValueError):
-             update.message.reply_text('Usage:/ video <keyword>')
+             update.message.reply_text('Usage:/ audio <url>')
              return
-          yt = YouTube(str(msg))
-            # extract only audio
-          video = yt.streams.filter(only_audio=True).first()
-          # check for destination to save file
-          destination = str(update.effective_chat.id)
-            
-          # download the file
-          out_file = video.download(output_path=destination)
-          
-          # save the file
-          base, ext = os.path.splitext(out_file)
-          new_file = base + '.mp3'
-          os.rename(out_file, new_file)
-            
-          audio = open(new_file, 'rb')
-          context.bot.send_audio(destination, audio)
-          self.send(id = update.effective_chat.id, message_content = msg, method='vedio')
+          self.send(id = update.effective_chat.id, message_content = msg, method='audio')
           # context.bot.send_message(chat_id = update.effective_chat.id, text = reply_message)
       def add(update: Update, context: CallbackContext) -> None:
           logging.info("Update: "+str(update))
@@ -249,7 +233,7 @@ class chatbot():
       dispatcher.add_handler(CommandHandler("chat", chat))
       dispatcher.add_handler(CommandHandler("node", node))
       dispatcher.add_handler(CommandHandler("stock", stock))
-      dispatcher.add_handler(CommandHandler("video", video))
+      dispatcher.add_handler(CommandHandler("audio", audio))
       dispatcher.add_handler(echo_handler)
       
       # TO start the bot
@@ -308,6 +292,24 @@ class chatbot():
         def return_echo(bot, id, return_message):
            bot.send_message(chat_id=id, text=return_message)
 
+        def return_audio(bot, id, return_message):
+            yt = YouTube(str(return_message))
+              # extract only audio
+            video = yt.streams.filter(only_audio=True).first()
+            # check for destination to save file
+            destination = str(id)
+              
+            # download the file
+            out_file = video.download(output_path=destination)
+            
+            # save the file
+            base, ext = os.path.splitext(out_file)
+            new_file = base + '.mp3'
+            os.rename(out_file, new_file)
+              
+            audio = open(new_file, 'rb')
+            bot.send_audio(destination, audio)
+
         def return_stock(bot, id, return_message):
            real_time_stock = getStockData(return_message)
            logging.info("chat: "+str(real_time_stock))
@@ -336,6 +338,8 @@ class chatbot():
            return_chat(bot=bot, id =content_body['id'], return_message = content_body['message'])
         elif content_body['method'] == 'stock':
            return_stock(bot=bot, id =content_body['id'], return_message = content_body['message'])
+        elif content_body['method'] == 'audio':
+           return_audio(bot=bot, id =content_body['id'], return_message = content_body['message'])
       
       channel.basic_consume(result.method.queue,callback,auto_ack = False)
       channel.start_consuming()
