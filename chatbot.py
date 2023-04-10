@@ -1,3 +1,4 @@
+from pytube import YouTube
 from telegram import Update, Bot
 from telegram.ext import Updater,MessageHandler,Filters, CommandHandler, CallbackContext
 import configparser
@@ -16,6 +17,7 @@ import socket
 import redis
 import openai
 import base64
+import os
 def encode(string:str):
    return base64.b64encode(string.encode())
 def decode(b64_str):
@@ -160,6 +162,32 @@ class chatbot():
              return
           self.send(id = update.effective_chat.id, message_content = msg, method='stock')
           # context.bot.send_message(chat_id = update.effective_chat.id, text = reply_message)
+      def video(update, context):
+          logging.info("Update: "+str(update))
+          logging.info("Context: "+str(context))
+          try:
+             msg = context.args[0]
+          except(IndexError, ValueError):
+             update.message.reply_text('Usage:/ video <keyword>')
+             return
+          yt = YouTube(str(msg))
+            # extract only audio
+          video = yt.streams.filter(only_audio=True).first()
+          # check for destination to save file
+          destination = str(update.effective_chat.id)
+            
+          # download the file
+          out_file = video.download(output_path=destination)
+          
+          # save the file
+          base, ext = os.path.splitext(out_file)
+          new_file = base + '.mp3'
+          os.rename(out_file, new_file)
+            
+          audio = open(new_file, 'rb')
+          context.bot.send_audio(destination, audio)
+          self.send(id = update.effective_chat.id, message_content = msg, method='vedio')
+          # context.bot.send_message(chat_id = update.effective_chat.id, text = reply_message)
       def add(update: Update, context: CallbackContext) -> None:
           logging.info("Update: "+str(update))
           logging.info("Context: "+str(context))
@@ -221,6 +249,7 @@ class chatbot():
       dispatcher.add_handler(CommandHandler("chat", chat))
       dispatcher.add_handler(CommandHandler("node", node))
       dispatcher.add_handler(CommandHandler("stock", stock))
+      dispatcher.add_handler(CommandHandler("video", video))
       dispatcher.add_handler(echo_handler)
       
       # TO start the bot
