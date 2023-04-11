@@ -25,3 +25,17 @@ docker run --name node4 --net 7940 liesgame/chatbot python chatbot.py --config d
 the name should be different other container, and it must be same as the ip
 
 -- net should be same as the network in docker compose
+
+
+
+OR we can run the docker.py to leverage telegarm control the nodes
+
+```python
+python3 docker.py 
+```
+
+![image-20230410190859539](readme.assets/image-20230410190859539.png)
+
+![image-20230410190902619](readme.assets/image-20230410190902619.png)
+
+[liesgame/chatbot - Docker Image | Docker Hub](https://hub.docker.com/r/liesgame/chatbot)
